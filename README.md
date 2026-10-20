@@ -2,7 +2,7 @@
 
 [![Live Demo](https://img.shields.io/badge/Demo-Live%20Application-brightgreen?style=for-the-badge&logo=github)](https://amanchaurasia081-sketch.github.io/smart-parking/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4%20%2F%204.x-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![Java](https://img.shields.io/badge/Java-17%20%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
+[![Java](https://img.shields.io/badge/Java-25%20%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
 **SmartPark** is a full-stack, enterprise-grade Smart Parking Management System designed to streamline parking slot allocation, real-time availability tracking, automated pricing, vehicle entry/exit auditing, and parking lot administrative controls.
@@ -74,7 +74,7 @@ For quick evaluation and testing:
 ## 💻 Local Setup & Running
 
 ### Prerequisites
-- Java Development Kit (JDK 17 or higher)
+- Java Development Kit (JDK 25 or higher)
 - Git
 
 ### Quick Launch (Windows)

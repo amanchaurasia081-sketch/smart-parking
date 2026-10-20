@@ -19,3 +19,4 @@ echo Backend API: http://localhost:8081/api/slots
 echo H2 Console: http://localhost:8081/h2-console
 echo.
 pause
+

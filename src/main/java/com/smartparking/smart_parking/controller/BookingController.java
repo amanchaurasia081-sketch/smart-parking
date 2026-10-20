@@ -187,6 +187,32 @@ public class BookingController {
     }
 
 
+    // ================= VEHICLE EXIT BY SLOT NUMBER (ADMIN HELPER) =================
+
+    @PutMapping("/slot/{slotNumber}/exit")
+    public Booking exitBySlotNumber(
+            @PathVariable String slotNumber) {
+
+        String cleanSlot = slotNumber.trim().toUpperCase();
+
+        Booking activeBooking = bookingRepository.findAll().stream()
+                .filter(b -> cleanSlot.equalsIgnoreCase(b.getSlotNumber()) &&
+                        ("active".equalsIgnoreCase(b.getStatus()) || "parked".equalsIgnoreCase(b.getStatus())))
+                .reduce((first, second) -> second)
+                .orElse(null);
+
+        if (activeBooking != null) {
+            activeBooking.setExitTime(LocalDateTime.now().toString());
+            activeBooking.setStatus("completed");
+            bookingRepository.save(activeBooking);
+        }
+
+        releaseParkingSlot(cleanSlot);
+
+        return activeBooking;
+    }
+
+
     // ================= UPDATE PAYMENT =================
 
     @PutMapping("/{id}/payment")
@@ -210,6 +236,20 @@ public class BookingController {
         booking.setPaymentStatus(status);
 
         return bookingRepository.save(booking);
+    }
+
+
+    // ================= DELETE BOOKING (ADMIN) =================
+
+    @DeleteMapping("/{id}")
+    public void deleteBooking(@PathVariable Long id) {
+        Booking booking = bookingRepository.findById(id).orElse(null);
+        if (booking != null) {
+            if ("active".equalsIgnoreCase(booking.getStatus()) || "parked".equalsIgnoreCase(booking.getStatus())) {
+                releaseParkingSlot(booking.getSlotNumber());
+            }
+            bookingRepository.deleteById(id);
+        }
     }
 
 
