@@ -13,20 +13,27 @@
 
 - **Live Web Application**: [https://amanchaurasia081-sketch.github.io/smart-parking/](https://amanchaurasia081-sketch.github.io/smart-parking/)
 - **GitHub Repository**: [https://github.com/amanchaurasia081-sketch/smart-parking](https://github.com/amanchaurasia081-sketch/smart-parking)
-- **Deployment Platform**: GitHub Pages with Automated CI/CD & SSL Encryption
+- **Frontend**: GitHub Pages with HTTPS.
+- **Backend deployment files**: `Dockerfile` and `render.yaml` configure the Spring Boot API for Render. Set up a Neon PostgreSQL database and provide its JDBC URL, username, and password as Render environment variables before deploying the backend.
+- **API URL**: `config.js` points the frontend to the Render service. Update it if the service is created under a different Render hostname.
+- **Live sync**: Connected devices refresh shared availability and bookings every five seconds. The visible clock and entry/exit times use the backend's clock and display in India Standard Time.
+
+### Backend deployment setup
+
+1. Create a PostgreSQL project in Neon and copy its connection hostname, database name, username, and password.
+2. In Render, create a Blueprint from this repository and select `render.yaml`.
+3. Set `DATABASE_URL` to a JDBC URL such as `jdbc:postgresql://<neon-host>/<database>?sslmode=require`; add the matching `DATABASE_USERNAME` and `DATABASE_PASSWORD` as private environment variables.
+4. Set a strong private `ADMIN_PASSWORD`. Render generates `JWT_SECRET`. The administrator account is created only on the database's first startup.
+5. Deploy the Render service. The frontend configuration expects `https://smart-parking-api.onrender.com`; update `config.js` if Render assigned another URL.
+6. Push the updated `config.js` and frontend files to GitHub. Register a user from the site; use the administrator email and password configured privately in Render for admin access.
+
+Do not share database passwords, administrator passwords, or `JWT_SECRET` in chat or commit them to GitHub. Render's free web service can sleep while unused, so its first request may take longer to respond.
 
 ---
 
-## 🔑 Demo Login Credentials
+## 🔐 Accounts
 
-For quick evaluation and testing:
-
-| Role | Email | Password | Features |
-| :--- | :--- | :--- | :--- |
-| ⚙️ **Administrator** | `admin@smartpark.com` | `admin123` | Full Admin Dashboard, Slot Management (Add/Edit/Delete/Release), Global Booking Log |
-| 👤 **Standard User** | `demo@user.com` | `user123` | Slot Reservation, Vehicle Entry/Exit, Payment Status, Booking Cancellation |
-
-*(New user registration is also available directly on the web interface)*
+Create user accounts from the web interface. The administrator account is created on the backend's first startup from the private `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables; never put production credentials in source files.
 
 ---
 
@@ -54,20 +61,20 @@ For quick evaluation and testing:
 - Emergency slot release override.
 - Global booking audit trail.
 
-### 5. ⚡ Hybrid Architecture (Spring Boot + Standalone Mode)
-- **Spring Boot Live REST API**: Connects to Spring Boot backend (`http://localhost:8081/api`) with H2 in-memory or MySQL database.
-- **Resilient Client Engine**: Transparently falls back to persistent client-side storage when running standalone or hosted on GitHub Pages, ensuring zero downtime and 100% feature availability anywhere.
+### 5. ⚡ Shared Live Architecture
+- **Spring Boot REST API**: Stores shared users, bookings, and parking-slot state in the server database.
+- **Cross-device updates**: The web app refreshes shared state every five seconds while open.
+- **Server clock**: Booking entry/exit timestamps come from the server and display in India Standard Time.
+- **Local demo**: Browser-local storage is only used on localhost or when opening the local file; it is not shared with other devices.
 
 ---
 
 ## 🛠️ Technology Stack
 
 - **Backend**: Spring Boot, Spring Data JPA, Spring Security, BCrypt, Maven.
-- **Databases**: 
-  - **H2 In-Memory Database** (default zero-configuration mode for instant startup anywhere).
-  - **MySQL 8.x** (optional enterprise production profile).
+- **Databases**: H2 for local development; PostgreSQL (Neon) for shared production data.
 - **Frontend**: Responsive HTML5, Modern CSS3 with CSS Variables, ES6+ JavaScript.
-- **Hosting & CI/CD**: GitHub Pages, Git.
+- **Hosting & CI/CD**: GitHub Pages frontend, Render backend, Neon PostgreSQL database.
 
 ---
 

@@ -2,77 +2,75 @@ package com.smartparking.smart_parking.controller;
 
 import com.smartparking.smart_parking.entity.User;
 import com.smartparking.smart_parking.repository.UserRepository;
+import com.smartparking.smart_parking.dto.AuthResponse;
+import com.smartparking.smart_parking.security.TokenService;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*")
 public class AuthController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TokenService tokenService;
 
     public AuthController(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            TokenService tokenService) {
 
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.tokenService = tokenService;
     }
 
 
     // ================= REGISTER =================
 
     @PostMapping("/register")
-    public User register(@RequestBody User user) {
+    public AuthResponse register(@RequestBody User user) {
 
-        if (user.getName() == null ||
-                user.getName().trim().isEmpty()) {
+        String name = user.getName() == null ? "" : user.getName().trim();
+        String email = user.getEmail() == null ? "" : user.getEmail().trim().toLowerCase();
+        String password = user.getPassword();
+        String vehicle = user.getVehicle() == null ? "" : user.getVehicle().trim().toUpperCase();
 
-            throw new RuntimeException(
-                    "Name is required");
+        if (name.isEmpty() || name.length() > 80) {
+            throw new IllegalArgumentException("Name must be between 1 and 80 characters");
+        }
+        if (!email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") || email.length() > 254) {
+            throw new IllegalArgumentException("A valid email address is required");
+        }
+        if (password == null || password.length() < 6 || password.length() > 72) {
+            throw new IllegalArgumentException("Password must be between 6 and 72 characters");
+        }
+        if (!vehicle.matches("[A-Z0-9-]{2,20}")) {
+            throw new IllegalArgumentException("Vehicle number must be 2-20 letters, numbers, or hyphens");
+        }
+        if (userRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("Email is already registered");
         }
 
-        if (user.getEmail() == null ||
-                user.getEmail().trim().isEmpty()) {
-
-            throw new RuntimeException(
-                    "Email is required");
-        }
-
-        if (user.getPassword() == null ||
-                user.getPassword().length() < 6) {
-
-            throw new RuntimeException(
-                    "Password must be at least 6 characters");
-        }
-
-        if (userRepository.existsByEmail(
-                user.getEmail().trim().toLowerCase())) {
-
-            throw new RuntimeException(
-                    "Email is already registered");
-        }
-
-        user.setEmail(
-                user.getEmail().trim().toLowerCase());
-
+        user.setName(name);
+        user.setEmail(email);
+        user.setVehicle(vehicle);
         user.setPassword(
                 passwordEncoder.encode(
-                        user.getPassword()));
+                        password));
 
         user.setRole("USER");
 
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        return new AuthResponse(tokenService.issue(savedUser), savedUser);
     }
 
 
     // ================= LOGIN =================
 
     @PostMapping("/login")
-    public User login(@RequestBody User loginUser) {
+    public AuthResponse login(@RequestBody User loginUser) {
 
         if (loginUser.getEmail() == null ||
                 loginUser.getPassword() == null) {
@@ -100,6 +98,6 @@ public class AuthController {
                     "Invalid email or password");
         }
 
-        return user;
+        return new AuthResponse(tokenService.issue(user), user);
     }
 }

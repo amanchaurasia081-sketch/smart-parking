@@ -6,6 +6,7 @@ import com.smartparking.smart_parking.repository.ParkingSlotRepository;
 import com.smartparking.smart_parking.repository.UserRepository;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -15,15 +16,21 @@ public class DataInitializer implements CommandLineRunner {
     private final ParkingSlotRepository parkingSlotRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final String adminEmail;
+    private final String adminPassword;
 
     public DataInitializer(
             ParkingSlotRepository parkingSlotRepository,
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            @Value("${app.admin.email:admin@smartpark.com}") String adminEmail,
+            @Value("${app.admin.password:}") String adminPassword) {
 
         this.parkingSlotRepository = parkingSlotRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.adminEmail = adminEmail.trim().toLowerCase();
+        this.adminPassword = adminPassword;
     }
 
     @Override
@@ -54,16 +61,15 @@ public class DataInitializer implements CommandLineRunner {
 
         // ================= ADMIN USER =================
 
-        if (!userRepository.existsByEmail(
-                "admin@smartpark.com")) {
+        if (!adminPassword.isBlank() && !userRepository.existsByEmail(adminEmail)) {
 
             User admin = new User();
 
             admin.setName("Administrator");
-            admin.setEmail("admin@smartpark.com");
+            admin.setEmail(adminEmail);
 
             admin.setPassword(
-                    passwordEncoder.encode("admin123")
+                    passwordEncoder.encode(adminPassword)
             );
 
             admin.setRole("ADMIN");

@@ -5,20 +5,32 @@
 
 // Determine base API endpoint
 const API_URL = (function () {
-    if (window.location.protocol.startsWith("http") && (window.location.port === "8081" || window.location.port === "8080")) {
-        return "/api";
+    if (window.location.protocol === "file:") {
+        return "http://localhost:8081/api";
     }
     if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-        return "http://localhost:8081/api";
+        return window.location.port === "8081" ? "/api" : "http://localhost:8081/api";
+    }
+    const configuredUrl = window.SMARTPARK_API_URL;
+    if (typeof configuredUrl === "string" && configuredUrl.trim()) {
+        return configuredUrl.trim().replace(/\/+$/, "").replace(/\/api$/, "") + "/api";
+    }
+    if (window.location.protocol.startsWith("http") && window.location.port === "8081") {
+        return "/api";
     }
     return "/api";
 })();
+const LOCAL_DEMO_MODE = window.location.protocol === "file:" ||
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+const LIVE_REFRESH_INTERVAL_MS = 5000;
+let liveRefreshInProgress = false;
 
 // System State
 let isBackendAvailable = false;
-let backendCheckDone = false;
 let parkingSlots = [];
 let selectedSlot = null;
+let serverClockOffsetMs = null;
 
 // Default initial slot template (20 slots)
 const DEFAULT_SLOTS = Array.from({ length: 20 }, (_, i) => ({
@@ -27,14 +39,47 @@ const DEFAULT_SLOTS = Array.from({ length: 20 }, (_, i) => ({
     status: (i === 1 || i === 4 || i === 6 || i === 10 || i === 13 || i === 16 || i === 19) ? "OCCUPIED" : "AVAILABLE"
 }));
 
-// Default Admin user
-const DEFAULT_ADMIN = {
-    id: 1,
-    name: "Administrator",
-    email: "admin@smartpark.com",
-    role: "ADMIN",
-    vehicle: "ADMIN-01"
-};
+async function apiFetch(url, options = {}) {
+    const headers = new Headers(options.headers || {});
+    const token = localStorage.getItem("smartParkToken");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401) {
+        localStorage.removeItem("smartParkToken");
+        localStorage.removeItem("smartParkUser");
+        updateNavbar();
+    }
+    return response;
+}
+
+function useLocalDemoFallback() {
+    if (LOCAL_DEMO_MODE) return true;
+    showToast("Online sync is unavailable. This action was not saved; please try again when the server is online.", "!");
+    return false;
+}
+
+function getIndiaDate() {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+}
+
+function formatServerTime(value) {
+    if (!value) return "Not recorded";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("en-IN", {
+        timeZone: "Asia/Kolkata",
+        dateStyle: "medium",
+        timeStyle: "short"
+    }).format(date);
+}
 
 /* ================= LOCAL STORAGE DATABASE LAYER ================= */
 
@@ -54,7 +99,6 @@ const LocalDB = {
         const stored = localStorage.getItem("smartpark_db_users");
         if (!stored) {
             const initial = [
-                DEFAULT_ADMIN,
                 { id: 2, name: "Demo User", email: "demo@user.com", password: "user123", role: "USER", vehicle: "BR01AB1234" }
             ];
             localStorage.setItem("smartpark_db_users", JSON.stringify(initial));
@@ -73,7 +117,7 @@ const LocalDB = {
                     id: 101,
                     slotNumber: "A02",
                     vehicle: "BR01AB1234",
-                    bookingDate: new Date().toISOString().split("T")[0],
+                    bookingDate: getIndiaDate(),
                     duration: 2,
                     price: 40,
                     status: "parked",
@@ -86,7 +130,7 @@ const LocalDB = {
                     id: 102,
                     slotNumber: "A05",
                     vehicle: "DL04CD5678",
-                    bookingDate: new Date().toISOString().split("T")[0],
+                    bookingDate: getIndiaDate(),
                     duration: 3,
                     price: 60,
                     status: "active",
@@ -108,11 +152,11 @@ const LocalDB = {
 
 /* ================= BACKEND HEALTH CHECK & SYNC ================= */
 
-async function checkBackendConnectivity() {
+async function checkBackendConnectivity(timeoutMs = LOCAL_DEMO_MODE ? 1500 : 5000) {
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
-        const res = await fetch(`${API_URL}/slots`, { signal: controller.signal });
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const res = await apiFetch(`${API_URL}/slots`, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (res.ok) {
             isBackendAvailable = true;
@@ -135,13 +179,15 @@ function updateStatusBadge(online) {
     if (online) {
         badge.style.background = "#dcfce7";
         badge.style.color = "#15803d";
-        badge.title = "Connected to Spring Boot Live REST Server (Port 8081)";
-        text.innerHTML = "🟢 Spring Boot Active";
+        badge.title = "Connected to shared SmartPark cloud server";
+        text.textContent = "🟢 Live Sync";
     } else {
         badge.style.background = "#eff6ff";
         badge.style.color = "#1d4ed8";
-        badge.title = "Running with Persistent Local Storage Engine (Standalone Mode)";
-        text.innerHTML = "⚡ Smart Client Engine";
+        badge.title = LOCAL_DEMO_MODE
+            ? "Running in this device's local demo mode"
+            : "Cloud server is connecting or unavailable; shared changes are paused";
+        text.textContent = LOCAL_DEMO_MODE ? "⚡ Local Demo" : "⏳ Connecting";
     }
 }
 
@@ -152,7 +198,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     updateNavbar();
     
     // Check backend connection
-    await checkBackendConnectivity();
+    const backendOnline = await checkBackendConnectivity();
+    if (backendOnline) {
+        try {
+            await syncServerClock();
+        } catch (error) {
+            console.warn("Could not synchronize server clock:", error);
+        }
+    }
     
     // Load slots
     await loadParkingSlots();
@@ -161,6 +214,11 @@ document.addEventListener("DOMContentLoaded", async function () {
     renderParkingSlots();
     updateParkingSummary();
     updateHeroSlots();
+    window.setInterval(refreshLiveData, LIVE_REFRESH_INTERVAL_MS);
+    window.setInterval(renderServerClock, 1000);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) refreshLiveData();
+    });
 });
 
 /* ================= DATA LOADING ================= */
@@ -168,7 +226,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 async function loadParkingSlots() {
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/slots`);
+            const res = await apiFetch(`${API_URL}/slots`);
             if (res.ok) {
                 const data = await res.json();
                 parkingSlots = data.map(s => ({
@@ -185,6 +243,11 @@ async function loadParkingSlots() {
         }
     }
 
+    if (!LOCAL_DEMO_MODE) {
+        parkingSlots = [];
+        return;
+    }
+
     // Local DB fallback
     const dbSlots = LocalDB.getSlots();
     parkingSlots = dbSlots.map(s => ({
@@ -192,6 +255,65 @@ async function loadParkingSlots() {
         number: s.slotNumber,
         status: (s.status || "AVAILABLE").toLowerCase()
     }));
+}
+
+async function refreshLiveData() {
+    if (document.hidden || liveRefreshInProgress) return;
+    liveRefreshInProgress = true;
+    try {
+        const online = await checkBackendConnectivity(90000);
+        if (!online) return;
+
+        try {
+            await syncServerClock();
+        } catch (error) {
+            console.warn("Could not synchronize server clock:", error);
+        }
+        await loadParkingSlots();
+        renderParkingSlots();
+        updateParkingSummary();
+        updateHeroSlots();
+
+        const currentUser = JSON.parse(localStorage.getItem("smartParkUser") || "null");
+        if (currentUser && document.getElementById("dashboardModal")?.classList.contains("active")) {
+            await renderMyBookings();
+        }
+        if (currentUser?.role === "ADMIN" &&
+                document.getElementById("adminDashboardModal")?.classList.contains("active")) {
+            await loadAdminDashboard();
+        }
+    } finally {
+        liveRefreshInProgress = false;
+    }
+}
+
+async function syncServerClock() {
+    const requestStartedAt = Date.now();
+    const response = await apiFetch(`${API_URL}/time`);
+    if (!response.ok) throw new Error(`Server clock request failed: ${response.status}`);
+    const { now } = await response.json();
+    const serverTimeMs = Date.parse(now);
+    if (!Number.isFinite(serverTimeMs)) throw new Error("Server returned an invalid clock value");
+    const requestFinishedAt = Date.now();
+    serverClockOffsetMs = serverTimeMs - (requestStartedAt + requestFinishedAt) / 2;
+    renderServerClock();
+}
+
+function renderServerClock() {
+    const clock = document.getElementById("serverClock");
+    if (!clock) return;
+    if (serverClockOffsetMs === null) {
+        clock.textContent = LOCAL_DEMO_MODE ? "Local device time" : "Waiting for server time…";
+        return;
+    }
+    const now = new Date(Date.now() + serverClockOffsetMs);
+    clock.textContent = `Server time · ${new Intl.DateTimeFormat("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+    }).format(now)} IST`;
 }
 
 /* ================= RENDER PARKING SLOTS ================= */
@@ -322,7 +444,7 @@ async function confirmBooking(event) {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/bookings`, {
+            const res = await apiFetch(`${API_URL}/bookings`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(bookingPayload)
@@ -334,14 +456,17 @@ async function confirmBooking(event) {
                 return;
             } else {
                 const errText = await res.text();
-                throw new Error(errText || "Booking failed");
+                showToast(errText || "Booking failed. Please try again.", "!");
+                return;
             }
         } catch (err) {
-            console.warn("Backend booking failed, falling back to local store:", err);
+            console.warn("Backend booking failed:", err);
             isBackendAvailable = false;
             updateStatusBadge(false);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     // Local DB save
     const slots = LocalDB.getSlots();
@@ -434,20 +559,28 @@ async function loginUser(event) {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/auth/login`, {
+            const res = await apiFetch(`${API_URL}/auth/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password })
             });
 
             if (res.ok) {
-                const user = await res.json();
-                handleLoginSuccess(user);
+                const result = await res.json();
+                localStorage.setItem("smartParkToken", result.token);
+                handleLoginSuccess(result.user);
                 return;
             }
+            showToast("Invalid email or password.", "!");
+            return;
         } catch (e) {
-            console.warn("Live login failed, testing local storage:", e);
+            console.warn("Live login failed:", e);
         }
+    }
+
+    if (!LOCAL_DEMO_MODE) {
+        useLocalDemoFallback();
+        return;
     }
 
     // Local DB authentication
@@ -459,7 +592,7 @@ async function loginUser(event) {
         return;
     }
 
-    if (found.password && found.password !== password && password !== "admin123" && password !== "user123") {
+    if (!found.password || found.password !== password) {
         showToast("Incorrect password. Please try again.", "!");
         return;
     }
@@ -514,15 +647,16 @@ async function registerUser(event) {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/auth/register`, {
+            const res = await apiFetch(`${API_URL}/auth/register`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
 
             if (res.ok) {
-                const user = await res.json();
-                handleRegisterSuccess(user);
+                const result = await res.json();
+                localStorage.setItem("smartParkToken", result.token);
+                handleRegisterSuccess(result.user);
                 return;
             } else {
                 const text = await res.text();
@@ -530,11 +664,15 @@ async function registerUser(event) {
                     showToast("Email is already registered. Please login.", "!");
                     return;
                 }
+                showToast(text || "Could not create account.", "!");
+                return;
             }
         } catch (e) {
-            console.warn("Backend register failed, saving locally:", e);
+            console.warn("Backend register failed:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     // Local DB register
     const users = LocalDB.getUsers();
@@ -580,6 +718,7 @@ function handleRegisterSuccess(user) {
 
 function logoutUser() {
     localStorage.removeItem("smartParkUser");
+    localStorage.removeItem("smartParkToken");
     updateNavbar();
     closeModal("dashboardModal");
     closeModal("adminDashboardModal");
@@ -650,7 +789,7 @@ async function renderMyBookings() {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/bookings/user/${encodeURIComponent(currentUser.email)}`);
+            const res = await apiFetch(`${API_URL}/bookings/user/${encodeURIComponent(currentUser.email)}`);
             if (res.ok) {
                 bookings = await res.json();
             }
@@ -659,7 +798,7 @@ async function renderMyBookings() {
         }
     }
 
-    if (!bookings || bookings.length === 0) {
+    if ((!bookings || bookings.length === 0) && LOCAL_DEMO_MODE) {
         const allBookings = LocalDB.getBookings();
         bookings = allBookings.filter(b => b.userEmail && b.userEmail.toLowerCase() === currentUser.email.toLowerCase());
     }
@@ -733,8 +872,8 @@ async function renderMyBookings() {
                     <div><small>Amount</small><strong>₹${b.price || 0}</strong></div>
                 </div>
                 <div class="booking-status-info">
-                    <div><small>Entry</small><strong>${b.entryTime || "Not entered"}</strong></div>
-                    <div><small>Exit</small><strong>${b.exitTime || "Not exited"}</strong></div>
+                    <div><small>Entry (IST)</small><strong>${b.entryTime ? formatServerTime(b.entryTime) : "Not entered"}</strong></div>
+                    <div><small>Exit (IST)</small><strong>${b.exitTime ? formatServerTime(b.exitTime) : "Not exited"}</strong></div>
                     <div><small>Payment</small><strong>${paymentStatus}</strong></div>
                 </div>
                 <div class="booking-actions">
@@ -753,7 +892,7 @@ async function renderMyBookings() {
 async function vehicleEntry(bookingId) {
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/bookings/${bookingId}/entry`, { method: "PUT" });
+            const res = await apiFetch(`${API_URL}/bookings/${bookingId}/entry`, { method: "PUT" });
             if (res.ok) {
                 showToast("Vehicle entry recorded successfully!", "✓");
                 renderMyBookings();
@@ -763,6 +902,8 @@ async function vehicleEntry(bookingId) {
             console.warn("Backend entry failed, updating locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     const bookings = LocalDB.getBookings();
     const target = bookings.find(b => b.id === bookingId);
@@ -780,7 +921,7 @@ async function vehicleExit(bookingId, slotNumber) {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/bookings/${bookingId}/exit`, { method: "PUT" });
+            const res = await apiFetch(`${API_URL}/bookings/${bookingId}/exit`, { method: "PUT" });
             if (res.ok) {
                 showToast(`Vehicle exit recorded! Slot ${slotNumber} is now available.`, "✓");
                 await loadParkingSlots();
@@ -794,6 +935,8 @@ async function vehicleExit(bookingId, slotNumber) {
             console.warn("Backend exit failed, updating locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     const bookings = LocalDB.getBookings();
     const target = bookings.find(b => b.id === bookingId);
@@ -823,7 +966,7 @@ async function cancelBooking(bookingId, slotNumber) {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/bookings/${bookingId}/cancel`, { method: "PUT" });
+            const res = await apiFetch(`${API_URL}/bookings/${bookingId}/cancel`, { method: "PUT" });
             if (res.ok) {
                 showToast(`Booking cancelled. Slot ${slotNumber} is now available.`, "✓");
                 await loadParkingSlots();
@@ -837,6 +980,8 @@ async function cancelBooking(bookingId, slotNumber) {
             console.warn("Backend cancel failed, updating locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     const bookings = LocalDB.getBookings();
     const target = bookings.find(b => b.id === bookingId);
@@ -863,7 +1008,7 @@ async function cancelBooking(bookingId, slotNumber) {
 async function updatePaymentStatus(bookingId, newStatus) {
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/bookings/${bookingId}/payment?status=${encodeURIComponent(newStatus)}`, { method: "PUT" });
+            const res = await apiFetch(`${API_URL}/bookings/${bookingId}/payment?status=${encodeURIComponent(newStatus)}`, { method: "PUT" });
             if (res.ok) {
                 showToast(`Payment marked as ${newStatus}!`, "✓");
                 renderMyBookings();
@@ -873,6 +1018,8 @@ async function updatePaymentStatus(bookingId, newStatus) {
             console.warn("Backend payment update failed, updating locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     const bookings = LocalDB.getBookings();
     const target = bookings.find(b => b.id === bookingId);
@@ -898,23 +1045,22 @@ function openAdminDashboard() {
     loadAdminDashboard();
 }
 
-function loadAdminDashboard() {
-    loadAdminSlots();
-    loadAdminBookings();
+async function loadAdminDashboard() {
+    await Promise.all([loadAdminSlots(), loadAdminBookings()]);
 }
 
 async function loadAdminSlots() {
     let slots = [];
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/slots`);
+            const res = await apiFetch(`${API_URL}/slots`);
             if (res.ok) slots = await res.json();
         } catch (e) {
             console.warn("Backend admin slots failed, using local store:", e);
         }
     }
 
-    if (!slots || slots.length === 0) {
+    if ((!slots || slots.length === 0) && LOCAL_DEMO_MODE) {
         slots = LocalDB.getSlots();
     }
 
@@ -990,7 +1136,7 @@ async function adminAddSlot() {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/slots`, {
+            const res = await apiFetch(`${API_URL}/slots`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ slotNumber, status: "AVAILABLE" })
@@ -1009,6 +1155,8 @@ async function adminAddSlot() {
             console.warn("Backend add slot failed, adding locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     const slots = LocalDB.getSlots();
     if (slots.some(s => s.slotNumber === slotNumber)) {
@@ -1044,7 +1192,7 @@ async function adminEditSlot(slotId, currentSlotNumber, currentStatus) {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/slots/${slotId}`, {
+            const res = await apiFetch(`${API_URL}/slots/${slotId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ slotNumber: cleanNumber, status: cleanStatus })
@@ -1063,6 +1211,8 @@ async function adminEditSlot(slotId, currentSlotNumber, currentStatus) {
             console.warn("Backend edit slot failed, updating locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     const slots = LocalDB.getSlots();
     const slot = slots.find(s => s.id === slotId);
@@ -1084,7 +1234,7 @@ async function adminDeleteSlot(slotId, slotNumber) {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/slots/${slotId}`, { method: "DELETE" });
+            const res = await apiFetch(`${API_URL}/slots/${slotId}`, { method: "DELETE" });
             if (res.ok) {
                 showToast(`Slot ${slotNumber} deleted.`, "✓");
                 loadAdminSlots();
@@ -1098,6 +1248,8 @@ async function adminDeleteSlot(slotId, slotNumber) {
             console.warn("Backend delete slot failed, deleting locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     let slots = LocalDB.getSlots();
     slots = slots.filter(s => s.id !== slotId);
@@ -1114,7 +1266,7 @@ async function adminDeleteSlot(slotId, slotNumber) {
 async function adminReleaseSlot(slotId, slotNumber) {
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/slots/${slotId}/release`, { method: "PUT" });
+            const res = await apiFetch(`${API_URL}/slots/${slotId}/release`, { method: "PUT" });
             if (res.ok) {
                 showToast(`Slot ${slotNumber} is now AVAILABLE.`, "✓");
                 loadAdminSlots();
@@ -1128,6 +1280,8 @@ async function adminReleaseSlot(slotId, slotNumber) {
             console.warn("Backend release slot failed, updating locally:", e);
         }
     }
+
+    if (!useLocalDemoFallback()) return;
 
     const slots = LocalDB.getSlots();
     const slot = slots.find(s => s.id === slotId);
@@ -1148,14 +1302,14 @@ async function loadAdminBookings() {
 
     if (isBackendAvailable) {
         try {
-            const res = await fetch(`${API_URL}/bookings`);
+            const res = await apiFetch(`${API_URL}/bookings`);
             if (res.ok) bookings = await res.json();
         } catch (e) {
             console.warn("Backend admin bookings failed, using local store:", e);
         }
     }
 
-    if (!bookings || bookings.length === 0) {
+    if ((!bookings || bookings.length === 0) && LOCAL_DEMO_MODE) {
         bookings = LocalDB.getBookings();
     }
 
@@ -1188,8 +1342,8 @@ async function loadAdminBookings() {
                 <div><small>Amount</small><strong>₹${b.price || 0}</strong></div>
             </div>
             <div class="booking-status-info">
-                <div><small>Entry</small><strong>${b.entryTime || "Not entered"}</strong></div>
-                <div><small>Exit</small><strong>${b.exitTime || "Not exited"}</strong></div>
+                <div><small>Entry (IST)</small><strong>${b.entryTime ? formatServerTime(b.entryTime) : "Not entered"}</strong></div>
+                <div><small>Exit (IST)</small><strong>${b.exitTime ? formatServerTime(b.exitTime) : "Not exited"}</strong></div>
                 <div><small>Payment</small><strong>${b.paymentStatus || "Pending"}</strong></div>
             </div>
         </div>
@@ -1244,7 +1398,7 @@ function togglePassword(inputId) {
 function setMinimumDate() {
     const dateInput = document.getElementById("bookingDate");
     if (dateInput) {
-        const today = new Date().toISOString().split("T")[0];
+        const today = getIndiaDate();
         dateInput.min = today;
         if (!dateInput.value) dateInput.value = today;
     }

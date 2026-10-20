@@ -5,15 +5,22 @@ import com.smartparking.smart_parking.entity.ParkingSlot;
 import com.smartparking.smart_parking.repository.BookingRepository;
 import com.smartparking.smart_parking.repository.ParkingSlotRepository;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/bookings")
-@CrossOrigin(origins = "*")
 public class BookingController {
+
+    private static final double HOURLY_RATE = 20.0;
+    private static final ZoneId BUSINESS_TIME_ZONE = ZoneId.of("Asia/Kolkata");
 
     private final BookingRepository bookingRepository;
     private final ParkingSlotRepository parkingSlotRepository;
@@ -30,8 +37,10 @@ public class BookingController {
     // ================= CREATE BOOKING =================
 
     @PostMapping
+    @Transactional
     public Booking createBooking(
-            @RequestBody Booking booking) {
+            @RequestBody Booking booking,
+            Authentication authentication) {
 
         if (booking.getSlotNumber() == null ||
                 booking.getSlotNumber().trim().isEmpty()) {
@@ -40,18 +49,41 @@ public class BookingController {
                     "Parking slot is required");
         }
 
-        if (booking.getUserEmail() == null ||
-                booking.getUserEmail().trim().isEmpty()) {
+        String vehicle = booking.getVehicle() == null ? "" : booking.getVehicle().trim().toUpperCase();
+        if (!vehicle.matches("[A-Z0-9-]{2,20}")) {
+            throw new IllegalArgumentException("Vehicle number must be 2-20 letters, numbers, or hyphens");
+        }
 
-            throw new RuntimeException(
-                    "User email is required");
+        if (booking.getDuration() == null || booking.getDuration() < 1 || booking.getDuration() > 5) {
+            throw new IllegalArgumentException("Duration must be between 1 and 5 hours");
+        }
+
+        if (booking.getBookingDate() == null || booking.getBookingDate().isBlank()) {
+            throw new IllegalArgumentException("A valid booking date is required");
+        }
+
+        LocalDate bookingDate;
+        try {
+            bookingDate = LocalDate.parse(booking.getBookingDate());
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException("A valid booking date is required", exception);
+        }
+        if (bookingDate.isBefore(LocalDate.now(BUSINESS_TIME_ZONE))) {
+            throw new IllegalArgumentException("Booking date cannot be in the past");
         }
 
         String slotNum = booking.getSlotNumber().trim().toUpperCase();
         booking.setSlotNumber(slotNum);
+        booking.setUserEmail(authentication.getName());
+        booking.setVehicle(vehicle);
+        booking.setPrice(booking.getDuration() * HOURLY_RATE);
+        booking.setStatus("active");
+        booking.setPaymentStatus("Pending");
+        booking.setEntryTime(null);
+        booking.setExitTime(null);
 
         ParkingSlot parkingSlot =
-                parkingSlotRepository.findBySlotNumber(slotNum)
+                parkingSlotRepository.findWithLockBySlotNumber(slotNum)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Parking slot not found"));
@@ -60,14 +92,6 @@ public class BookingController {
 
             throw new RuntimeException(
                     "Parking slot is already occupied");
-        }
-
-        if (booking.getStatus() == null) {
-            booking.setStatus("active");
-        }
-
-        if (booking.getPaymentStatus() == null) {
-            booking.setPaymentStatus("Pending");
         }
 
         parkingSlot.setStatus("OCCUPIED");
@@ -81,9 +105,12 @@ public class BookingController {
 
     @GetMapping("/user/{email}")
     public List<Booking> getUserBookings(
-            @PathVariable String email) {
+            @PathVariable String email,
+            Authentication authentication) {
 
-        return bookingRepository.findByUserEmail(email);
+        String requestedEmail = email.trim().toLowerCase();
+        requireOwnerOrAdmin(requestedEmail, authentication);
+        return bookingRepository.findByUserEmail(requestedEmail);
     }
 
 
@@ -99,18 +126,21 @@ public class BookingController {
     // ================= CANCEL BOOKING =================
 
     @PutMapping("/{id}/cancel")
+    @Transactional
     public Booking cancelBooking(
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            Authentication authentication) {
 
         Booking booking =
                 bookingRepository.findById(id)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Booking not found"));
+        requireOwnerOrAdmin(booking.getUserEmail(), authentication);
 
-        if ("cancelled".equalsIgnoreCase(booking.getStatus())) {
+        if (!"active".equalsIgnoreCase(booking.getStatus())) {
             throw new RuntimeException(
-                    "Booking is already cancelled");
+                    "Only active bookings can be cancelled");
         }
 
         booking.setStatus("cancelled");
@@ -125,27 +155,30 @@ public class BookingController {
     // ================= VEHICLE ENTRY =================
 
     @PutMapping("/{id}/entry")
+    @Transactional
     public Booking vehicleEntry(
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            Authentication authentication) {
 
         Booking booking =
                 bookingRepository.findById(id)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Booking not found"));
+        requireOwnerOrAdmin(booking.getUserEmail(), authentication);
 
         if ("cancelled".equalsIgnoreCase(booking.getStatus())) {
             throw new RuntimeException(
                     "Cancelled booking cannot be entered");
         }
 
-        if ("completed".equalsIgnoreCase(booking.getStatus())) {
+        if (!"active".equalsIgnoreCase(booking.getStatus())) {
             throw new RuntimeException(
-                    "Booking is already completed");
+                    "Vehicle entry requires an active booking");
         }
 
         booking.setEntryTime(
-                LocalDateTime.now().toString());
+                Instant.now().toString());
 
         booking.setStatus("parked");
 
@@ -156,27 +189,30 @@ public class BookingController {
     // ================= VEHICLE EXIT =================
 
     @PutMapping("/{id}/exit")
+    @Transactional
     public Booking vehicleExit(
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            Authentication authentication) {
 
         Booking booking =
                 bookingRepository.findById(id)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Booking not found"));
+        requireOwnerOrAdmin(booking.getUserEmail(), authentication);
 
         if ("cancelled".equalsIgnoreCase(booking.getStatus())) {
             throw new RuntimeException(
                     "Cancelled booking cannot exit");
         }
 
-        if ("completed".equalsIgnoreCase(booking.getStatus())) {
+        if (!"parked".equalsIgnoreCase(booking.getStatus())) {
             throw new RuntimeException(
-                    "Vehicle has already exited");
+                    "Vehicle exit requires a parked booking");
         }
 
         booking.setExitTime(
-                LocalDateTime.now().toString());
+                Instant.now().toString());
 
         booking.setStatus("completed");
 
@@ -190,6 +226,7 @@ public class BookingController {
     // ================= VEHICLE EXIT BY SLOT NUMBER (ADMIN HELPER) =================
 
     @PutMapping("/slot/{slotNumber}/exit")
+    @Transactional
     public Booking exitBySlotNumber(
             @PathVariable String slotNumber) {
 
@@ -202,7 +239,7 @@ public class BookingController {
                 .orElse(null);
 
         if (activeBooking != null) {
-            activeBooking.setExitTime(LocalDateTime.now().toString());
+            activeBooking.setExitTime(Instant.now().toString());
             activeBooking.setStatus("completed");
             bookingRepository.save(activeBooking);
         }
@@ -218,13 +255,15 @@ public class BookingController {
     @PutMapping("/{id}/payment")
     public Booking updatePayment(
             @PathVariable Long id,
-            @RequestParam String status) {
+            @RequestParam String status,
+            Authentication authentication) {
 
         Booking booking =
                 bookingRepository.findById(id)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Booking not found"));
+        requireOwnerOrAdmin(booking.getUserEmail(), authentication);
 
         if (status == null ||
                 status.trim().isEmpty()) {
@@ -233,7 +272,10 @@ public class BookingController {
                     "Payment status is required");
         }
 
-        booking.setPaymentStatus(status);
+        if (!"Pending".equalsIgnoreCase(status) && !"Paid".equalsIgnoreCase(status)) {
+            throw new IllegalArgumentException("Payment status must be Pending or Paid");
+        }
+        booking.setPaymentStatus(status.trim());
 
         return bookingRepository.save(booking);
     }
@@ -242,6 +284,7 @@ public class BookingController {
     // ================= DELETE BOOKING (ADMIN) =================
 
     @DeleteMapping("/{id}")
+    @Transactional
     public void deleteBooking(@PathVariable Long id) {
         Booking booking = bookingRepository.findById(id).orElse(null);
         if (booking != null) {
@@ -268,4 +311,14 @@ public class BookingController {
                     parkingSlotRepository.save(slot);
                 });
     }
+
+    private void requireOwnerOrAdmin(String ownerEmail, Authentication authentication) {
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        if (!isAdmin && (ownerEmail == null ||
+                !ownerEmail.equalsIgnoreCase(authentication.getName()))) {
+            throw new org.springframework.security.access.AccessDeniedException("Not allowed to access this booking");
+        }
+    }
+
 }

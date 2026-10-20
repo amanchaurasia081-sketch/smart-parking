@@ -2,13 +2,14 @@ package com.smartparking.smart_parking.controller;
 
 import com.smartparking.smart_parking.entity.ParkingSlot;
 import com.smartparking.smart_parking.repository.ParkingSlotRepository;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/slots")
-@CrossOrigin(origins = "*")
 public class ParkingSlotController {
 
     private final ParkingSlotRepository parkingSlotRepository;
@@ -45,6 +46,7 @@ public class ParkingSlotController {
     // ================= BOOK SLOT =================
 
     @PutMapping("/{id}/book")
+    @Transactional
     public ParkingSlot bookSlot(
             @PathVariable Long id) {
 
@@ -69,6 +71,7 @@ public class ParkingSlotController {
     // ================= RELEASE SLOT =================
 
     @PutMapping("/{id}/release")
+    @Transactional
     public ParkingSlot releaseSlot(
             @PathVariable Long id) {
 
@@ -98,6 +101,9 @@ public class ParkingSlotController {
         }
 
         String slotNum = slot.getSlotNumber().trim().toUpperCase();
+        if (!slotNum.matches("[A-Z0-9][A-Z0-9-]{0,19}")) {
+            throw new IllegalArgumentException("Slot number must be 1-20 letters, numbers, or hyphens");
+        }
 
         if (parkingSlotRepository.existsBySlotNumber(slotNum)) {
             throw new RuntimeException("Slot " + slotNum + " already exists");
@@ -113,6 +119,7 @@ public class ParkingSlotController {
     // ================= UPDATE SLOT =================
 
     @PutMapping("/{id}")
+    @Transactional
     public ParkingSlot updateSlot(
             @PathVariable Long id,
             @RequestBody ParkingSlot updatedSlot) {
@@ -128,14 +135,24 @@ public class ParkingSlotController {
                         .trim()
                         .isEmpty()) {
 
-            slot.setSlotNumber(
-                    updatedSlot.getSlotNumber().trim().toUpperCase());
+            String slotNumber = updatedSlot.getSlotNumber().trim().toUpperCase();
+            if (!slotNumber.matches("[A-Z0-9][A-Z0-9-]{0,19}")) {
+                throw new IllegalArgumentException("Slot number must be 1-20 letters, numbers, or hyphens");
+            }
+            if (!slotNumber.equalsIgnoreCase(slot.getSlotNumber()) &&
+                    parkingSlotRepository.existsBySlotNumber(slotNumber)) {
+                throw new IllegalArgumentException("Slot " + slotNumber + " already exists");
+            }
+            slot.setSlotNumber(slotNumber);
         }
 
         if (updatedSlot.getStatus() != null) {
 
-            slot.setStatus(
-                    updatedSlot.getStatus().trim().toUpperCase());
+            String status = updatedSlot.getStatus().trim().toUpperCase();
+            if (!"AVAILABLE".equals(status) && !"OCCUPIED".equals(status)) {
+                throw new IllegalArgumentException("Status must be AVAILABLE or OCCUPIED");
+            }
+            slot.setStatus(status);
         }
 
         return parkingSlotRepository.save(slot);
