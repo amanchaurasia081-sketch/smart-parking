@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark - Smart Parking System</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- ================= NAVBAR ================= -->
+<header class="navbar">
+
+    <div class="logo">
+        <span class="logo-icon">🅿</span>
+        Smart<span>Park</span>
+    </div>
+
+    <nav id="mainNav">
+        <a href="#home" onclick="if(window.innerWidth<=768)toggleMenu()">Home</a>
+        <a href="#parking" onclick="if(window.innerWidth<=768)toggleMenu()">Parking</a>
+        <a href="#features" onclick="if(window.innerWidth<=768)toggleMenu()">Features</a>
+        <a href="#about" onclick="if(window.innerWidth<=768)toggleMenu()">About</a>
+        <div class="mobile-only-buttons" id="mobileNavButtons" style="display:none; flex-direction:column; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid #e2e8f0;"></div>
+    </nav>
+
+    <div class="nav-buttons" id="navButtons">
+
+        <button
+            class="btn btn-outline"
+            onclick="openLogin()">
+            Login
+        </button>
+
+        <button
+            class="btn btn-primary"
+            onclick="openRegister()">
+            Register
+        </button>
+
+    </div>
+
+    <button
+        class="mobile-menu"
+        onclick="toggleMenu()">
+        ☰
+    </button>
+
+</header>
+
+<!-- ================= HERO ================= -->
+<section class="hero" id="home">
+
+    <div class="hero-content">
+
+        <div class="badge">
+            🚗 Smart & Easy Parking
+        </div>
+
+        <h1>
+            Find Your Perfect
+            <span>Parking Spot</span>
+        </h1>
+
+        <p>
+            Book your parking slot in seconds. Check real-time
+            availability and park without the hassle.
+        </p>
+
+        <div class="hero-buttons">
+            <button class="btn btn-primary btn-large"
+                    onclick="scrollToParking()">
+                Find Parking →
+            </button>
+
+            <button class="btn btn-white btn-large"
+                    onclick="openRegister()">
+                Create Account
+            </button>
+        </div>
+
+        <div class="hero-stats">
+            <div>
+                <strong id="heroSlots">48</strong>
+                <span>Parking Slots</span>
+            </div>
+
+            <div>
+                <strong>24/7</strong>
+                <span>Availability</span>
+            </div>
+
+            <div>
+                <strong>100%</strong>
+                <span>Secure</span>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="hero-visual">
+
+        <div class="parking-card">
+
+            <div class="card-top">
+                <div>
+                    <small>Parking Area</small>
+                    <h3>City Center Parking</h3>
+                </div>
+
+                <span class="live">
+                    <i></i> Live
+                </span>
+            </div>
+
+            <div class="mini-map">
+
+                <div class="mini-slot available">A01</div>
+                <div class="mini-slot occupied">A02</div>
+                <div class="mini-slot available">A03</div>
+                <div class="mini-slot available">A04</div>
+
+                <div class="mini-slot occupied">B01</div>
+                <div class="mini-slot available">B02</div>
+                <div class="mini-slot occupied">B03</div>
+                <div class="mini-slot available">B04</div>
+
+                <div class="mini-slot available">C01</div>
+                <div class="mini-slot available">C02</div>
+                <div class="mini-slot occupied">C03</div>
+                <div class="mini-slot available">C04</div>
+
+            </div>
+
+            <div class="map-footer">
+                <span><i class="dot green"></i> Available</span>
+                <span><i class="dot red"></i> Occupied</span>
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ================= FEATURES ================= -->
+<section class="section" id="features">
+
+    <div class="section-heading">
+        <span class="section-label">WHY SMARTPARK</span>
+        <h2>Parking Made <span>Simple</span></h2>
+        <p>
+            Everything you need to find and manage your parking spot.
+        </p>
+    </div>
+
+    <div class="features-grid">
+
+        <div class="feature-card">
+            <div class="feature-icon blue">📍</div>
+            <h3>Find Parking</h3>
+            <p>
+                Quickly find available parking slots near your location.
+            </p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon green">⚡</div>
+            <h3>Real-Time Status</h3>
+            <p>
+                See available and occupied parking slots in real time.
+            </p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon purple">📅</div>
+            <h3>Easy Booking</h3>
+            <p>
+                Reserve your preferred parking slot before you arrive.
+            </p>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon orange">🔒</div>
+            <h3>Secure</h3>
+            <p>
+                Your account and booking information stays protected.
+            </p>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ================= PARKING ================= -->
+<section class="section parking-section" id="parking">
+
+    <div class="section-heading">
+        <span class="section-label">PARKING SLOTS</span>
+        <h2>Choose Your <span>Parking Slot</span></h2>
+        <p>Select an available slot to make a reservation.</p>
+    </div>
+
+    <div class="parking-layout">
+
+        <div class="parking-area">
+
+            <div class="parking-toolbar">
+                <div>
+                    <h3>Ground Floor</h3>
+                    <p>City Center Parking</p>
+                </div>
+
+                <div class="legend">
+                    <span><i class="dot green"></i> Available</span>
+                    <span><i class="dot red"></i> Occupied</span>
+                    <span><i class="dot yellow"></i> Selected</span>
+                </div>
+            </div>
+
+            <div class="entrance">
+                🚗 ENTRANCE
+            </div>
+
+            <div class="parking-grid" id="parkingGrid">
+                <!-- JavaScript slots -->
+            </div>
+
+            <div class="exit">
+                EXIT 🚗
+            </div>
+
+        </div>
+
+        <aside class="availability-card">
+
+            <h3>Parking Summary</h3>
+
+            <div class="summary-item">
+                <span>Total Slots</span>
+                <strong id="totalSlots">20</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Available</span>
+                <strong class="green-text" id="availableSlots">12</strong>
+            </div>
+
+            <div class="summary-item">
+                <span>Occupied</span>
+                <strong class="red-text" id="occupiedSlots">8</strong>
+            </div>
+
+            <div class="progress">
+                <div id="progressBar"></div>
+            </div>
+
+            <button class="btn btn-primary full-btn"
+                    onclick="bookSelectedSlot()">
+                Book Selected Slot
+            </button>
+
+        </aside>
+
+    </div>
+
+</section>
+
+
+<!-- ================= ABOUT ================= -->
+<section class="section about-section" id="about">
+
+    <div class="about-content">
+
+        <span class="section-label">ABOUT SMARTPARK</span>
+
+        <h2>
+            A smarter way to
+            <span>park your vehicle.</span>
+        </h2>
+
+        <p>
+            SmartPark is a smart parking management system designed
+            to make parking faster, easier and more convenient.
+        </p>
+
+        <div class="about-points">
+            <div>✓ Easy online parking reservation</div>
+            <div>✓ Real-time slot availability</div>
+            <div>✓ Simple booking management</div>
+            <div>✓ User-friendly dashboard</div>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ================= FOOTER ================= -->
+<footer>
+
+    <div class="footer-content">
+
+        <div class="logo">
+            <span class="logo-icon">🅿</span>
+            Smart<span>Park</span>
+        </div>
+
+        <p>
+            Smart Parking Management System
+        </p>
+
+        <div>
+            © 2026 SmartPark. All Rights Reserved.
+        </div>
+
+    </div>
+
+</footer>
+
+
+<!-- ================= LOGIN MODAL ================= -->
+<div class="modal-overlay" id="loginModal">
+
+    <div class="modal">
+
+        <button class="close-btn" onclick="closeModal('loginModal')">
+            ×
+        </button>
+
+        <div class="modal-icon">🔐</div>
+
+        <h2>Welcome Back</h2>
+        <p>Login to manage your parking bookings.</p>
+
+        <form onsubmit="loginUser(event)">
+
+            <label>Email</label>
+            <input
+                type="email"
+                id="loginEmail"
+                placeholder="Enter your email"
+                required
+            >
+
+            <label>Password</label>
+
+            <div class="password-field">
+                <input
+                    type="password"
+                    id="loginPassword"
+                    placeholder="Enter password"
+                    required
+                >
+
+                <button type="button"
+                        onclick="togglePassword('loginPassword')">
+                    👁
+                </button>
+            </div>
+
+            <button class="btn btn-primary full-btn">
+                Login
+            </button>
+
+        </form>
+
+        <p class="switch-text">
+            Don't have an account?
+            <button onclick="switchToRegister()">Register</button>
+        </p>
+
+        <div style="font-size:12px; color:#475569; background:#f1f5f9; border-radius:10px; padding:12px; margin-top:16px; border:1px solid #e2e8f0; line-height:1.6;">
+            <div style="font-weight:700; color:#1e293b; margin-bottom:4px;">?? Quick Demo Credentials:</div>
+            <div>� <strong>Admin:</strong> <code style="background:#e2e8f0; padding:1px 4px; border-radius:4px;">admin@smartpark.com</code> / <code style="background:#e2e8f0; padding:1px 4px; border-radius:4px;">admin123</code></div>
+            <div>� <strong>User:</strong> <code style="background:#e2e8f0; padding:1px 4px; border-radius:4px;">demo@user.com</code> / <code style="background:#e2e8f0; padding:1px 4px; border-radius:4px;">user123</code></div>
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ================= REGISTER MODAL ================= -->
+<div class="modal-overlay" id="registerModal">
+
+    <div class="modal">
+
+        <button class="close-btn"
+                onclick="closeModal('registerModal')">
+            ×
+        </button>
+
+        <div class="modal-icon">👤</div>
+
+        <h2>Create Account</h2>
+        <p>Register to book your parking slot.</p>
+
+        <form onsubmit="registerUser(event)">
+
+            <label>Full Name</label>
+            <input
+                type="text"
+                id="registerName"
+                placeholder="Enter your name"
+                required
+            >
+
+            <label>Email</label>
+            <input
+                type="email"
+                id="registerEmail"
+                placeholder="Enter your email"
+                required
+            >
+
+            <label>Password</label>
+            <input
+                type="password"
+                id="registerPassword"
+                placeholder="Create password"
+                required
+            >
+
+            <label>Vehicle Number</label>
+            <input
+                type="text"
+                id="registerVehicle"
+                placeholder="e.g. BR01AB1234"
+                required
+            >
+
+            <button class="btn btn-primary full-btn">
+                Create Account
+            </button>
+
+        </form>
+
+        <p class="switch-text">
+            Already have an account?
+            <button onclick="switchToLogin()">Login</button>
+        </p>
+
+    </div>
+
+</div>
+
+
+<!-- ================= BOOKING MODAL ================= -->
+<div class="modal-overlay" id="bookingModal">
+
+    <div class="modal">
+
+        <button class="close-btn"
+                onclick="closeModal('bookingModal')">
+            ×
+        </button>
+
+        <div class="modal-icon">🅿️</div>
+
+        <h2>Book Parking Slot</h2>
+
+        <p>
+            Selected Slot:
+            <strong id="selectedSlotText">A01</strong>
+        </p>
+
+        <form onsubmit="confirmBooking(event)">
+
+            <label>Vehicle Number</label>
+
+            <input
+                type="text"
+                id="bookingVehicle"
+                placeholder="e.g. BR01AB1234"
+                required
+            >
+
+            <label>Date</label>
+
+            <input
+                type="date"
+                id="bookingDate"
+                required
+            >
+
+            <label>Parking Duration</label>
+
+            <select id="bookingDuration">
+
+                <option value="1">1 Hour - ₹20</option>
+                <option value="2">2 Hours - ₹40</option>
+                <option value="3">3 Hours - ₹60</option>
+                <option value="4">4 Hours - ₹80</option>
+                <option value="5">5 Hours - ₹100</option>
+
+            </select>
+
+            <div class="price-box">
+                <span>Total Amount</span>
+                <strong id="bookingPrice">₹20</strong>
+            </div>
+
+            <button class="btn btn-primary full-btn">
+                Confirm Booking
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- ================= DASHBOARD MODAL ================= -->
+<div class="modal-overlay" id="dashboardModal">
+
+    <div class="modal dashboard-modal">
+
+        <button class="close-btn"
+                onclick="closeModal('dashboardModal')">
+            ×
+        </button>
+
+        <div class="dashboard-header">
+            <div class="avatar" id="dashboardAvatar">U</div>
+
+            <div>
+                <h2 id="dashboardName">User</h2>
+                <p id="dashboardEmail">user@email.com</p>
+            </div>
+        </div>
+
+        <div class="dashboard-stats">
+
+            <div>
+                <strong id="myBookingCount">0</strong>
+                <span>Bookings</span>
+            </div>
+
+            <div>
+                <strong id="myActiveCount">0</strong>
+                <span>Active</span>
+            </div>
+
+            <div>
+                <strong id="mySpent">₹0</strong>
+                <span>Total Spent</span>
+            </div>
+
+        </div>
+
+        <h3 class="booking-title">My Bookings</h3>
+
+        <div id="myBookings">
+            <p class="empty-state">
+                No bookings yet.
+            </p>
+        </div>
+
+        <button class="btn btn-outline full-btn"
+                onclick="logoutUser()">
+            Logout
+        </button>
+
+    </div>
+
+</div>
+<!-- ================= ADMIN DASHBOARD ================= -->
+<div class="modal-overlay" id="adminDashboardModal">
+
+    <div class="modal dashboard-modal admin-dashboard-modal">
+
+        <button class="close-btn"
+                onclick="closeModal('adminDashboardModal')">
+            ×
+        </button>
+
+        <div class="dashboard-header">
+
+            <div class="avatar">
+                A
+            </div>
+
+            <div>
+                <h2>Admin Dashboard</h2>
+                <p>SmartPark Management Panel</p>
+            </div>
+
+        </div>
+
+
+        <!-- ADMIN STATS -->
+
+        <div class="dashboard-stats">
+
+            <div>
+                <strong id="adminTotalSlots">0</strong>
+                <span>Total Slots</span>
+            </div>
+
+            <div>
+                <strong id="adminAvailableSlots">0</strong>
+                <span>Available</span>
+            </div>
+
+            <div>
+                <strong id="adminOccupiedSlots">0</strong>
+                <span>Occupied</span>
+            </div>
+
+            <div>
+                <strong id="adminTotalBookings">0</strong>
+                <span>Bookings</span>
+            </div>
+
+        </div>
+
+
+        <!-- SLOT MANAGEMENT -->
+
+        <h3 class="booking-title">
+            🅿️ Parking Slot Management
+        </h3>
+
+        <div id="adminSlotsList">
+
+            <p class="empty-state">
+                Loading parking slots...
+            </p>
+
+        </div>
+
+
+        <!-- BOOKINGS -->
+
+        <h3 class="booking-title">
+            📋 Booking Management
+        </h3>
+
+        <div id="adminBookingsList">
+
+            <p class="empty-state">
+                Loading bookings...
+            </p>
+
+        </div>
+
+
+        <button
+            class="btn btn-outline full-btn"
+            onclick="logoutUser()">
+
+            Logout
+
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- ================= TOAST ================= -->
+<div class="toast" id="toast">
+    <span id="toastIcon">✓</span>
+    <span id="toastMessage">Success</span>
+</div>
+
+
+<script src="script.js"></script>
+
+</body>
+</html>
